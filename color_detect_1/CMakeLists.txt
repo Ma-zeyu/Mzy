@@ -1,11 +1,35 @@
-cmake_minimum_required(VERSION 3.16)
+# cmake needs this line
+cmake_minimum_required(VERSION 3.1)
+set(PROJECT_NAME1 "camera_class_project")
+# Define project name
+#set(CMAKE_BUILD_TYPE "Debug")
+set(CMAKE_BUILD_TYPE "Release")
+set(PROJ_DIR "/home/mzy/Documents/gig-e_camera-master")
 
-project(camera)
-
-add_executable(main main.cpp)
-
+project(${PROJECT_NAME1})
 find_package(OpenCV REQUIRED)
-find_package(Eigen3 REQUIRED)
+include_directories(${OpenCV_INCLUDE_DIRS})
+message(STATUS "OpenCV library status:")
+message(STATUS "    config: ${OpenCV_DIR}")
+message(STATUS "    version: ${OpenCV_VERSION}")
+message(STATUS "    libraries: ${OpenCV_LIBS}")
+message(STATUS "    include path: ${OpenCV_INCLUDE_DIRS}")
 
-target_include_directories(main PRIVATE ${EIGEN3_INCLUDE_DIR})
-target_link_libraries(main PUBLIC ${OpenCV_LIBS})
+link_directories("${PROJ_DIR}/lib/64")
+include_directories("${PROJ_DIR}/include" "/usr/include/X11" "/usr/include")
+link_libraries("${PROJ_DIR}/lib/64/libMvCameraControl.so")
+add_compile_options(-std=c++11)
+add_executable(${PROJECT_NAME1} main.cpp)
+add_library(camera_class SHARED camera_class.cpp
+        include/CameraParams.h
+        include/MvCameraControl.h
+        include/MvErrorDefine.h
+        include/MvISPErrorDefine.h
+        include/PixelType.h)
+#target_link_libraries(${PROJECT_NAME1} PUBLIC )
+
+# Link your application with OpenCV libraries
+target_link_libraries(${PROJECT_NAME1} ${OpenCV_LIBS} )
+target_link_libraries(${PROJECT_NAME1}  -lX11)
+target_link_libraries(${PROJECT_NAME1} libMvCameraControl.so)
+target_link_libraries(${PROJECT_NAME1} camera_class)

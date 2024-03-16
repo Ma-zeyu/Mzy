@@ -1,12 +1,19 @@
 #include<iostream>
 #include<opencv2/opencv.hpp>
 #include<vector>
+//#include<Eigen/Core>
+//#include<Eigen/Geometry>
 
-#include<Eigen/Core>
-#include<Eigen/Geometry>
+#include "opencv2/core.hpp"
+#include "opencv2/imgproc.hpp"
+#include "opencv2/highgui.hpp"
+#include <opencv2/video/video.hpp>
+#include <opencv2/opencv.hpp>
+#include "camera_class.h"
 
 using namespace cv;
-using namespace Eigen;
+//using namespace Eigen;
+
 enum DetectColor {
     BLUE,
     RED,
@@ -44,46 +51,29 @@ cv::Mat TrackleImage(const cv::Mat &image, DetectColor color) {
     cv::morphologyEx(substract_image,substract_image,1,kernel,Point (1,1),7);//膨胀
     cv::morphologyEx(substract_image,substract_image,0,kernel,Point (1,1),5);//腐蚀
 
-//    cv::imshow("image_gray",image_gray);
-//    cv::imshow("image_substract",substract_image);
-
-    cv::waitKey(100);
+    cv::waitKey(10);
     return substract_image;
 }
 
 int main()
 {
-
-    cv::VideoCapture video("/home/mzy/Downloads/绿色2.mp4");
+    Mat image;
+    int key;
+    camera video;
+    video.start_cam();
     while(1){
-        cv::Mat image;
-        video>>image;
-        if(image.empty()){
+        video.get_pic(&image);
+        imshow("test",image);
+        key=waitKey(1);
+        if(key==27)
+        {
+            video.close_cam();
             break;
         }
 
-//        //换成HSV空间
-//        Mat hsvImage;
-//        cvtColor(image, hsvImage, COLOR_BGR2HSV);
-//        //确定颜色范围
-//        Mat greenMask;
-//        Scalar lowerGreen = Scalar(36, 25, 25); // 绿色范围下阈值
-//        Scalar upperGreen = Scalar(86, 255, 255); // 绿色范围上阈值
-//        //筛选颜色
-//        Mat difference;
-//        inRange(hsvImage, lowerGreen, upperGreen, difference);
-//
-//        //去噪声及二值化
-//        Mat canny;
-//        Canny(difference,canny,80,160,3,false);
-//
-//        //膨胀运算
-//        cv::Mat kernel;
-//        kernel=cv::getStructuringElement(0,cv::Size(3,3));
-//        dilate(canny,canny,kernel);
-
         cv::Mat canny = TrackleImage(image, GREEN);
 
+        GaussianBlur(canny, canny, Size(5, 5), 0);
         //solvePnP
         std::vector<cv::Point3f> objectPoints;  // 世界坐标系中的三维点
         std::vector<cv::Point2f> imagePoints;   // 图像上的二维点
@@ -119,13 +109,16 @@ int main()
             double area = contourArea(contours[n]);
             if(area<9750){
                 continue;
-               // contours.erase(contours.begin() + n);
+                // contours.erase(contours.begin() + n);
             }
 
             //画矩形
             cv::RotatedRect rrect =minAreaRect(contours[n]);
             cv::Point2f points[4];
             rrect.points(points);
+
+            Point2f cpt =rrect.center;
+
             for(int i=0;i<4;++i){
                 if(i==3){
                     cv::line(image,points[i],points[0],cv::Scalar(0,255,0),2,8,0);
@@ -174,6 +167,13 @@ int main()
             imagePoints2.push_back(bottomRight);
             imagePoints2.push_back(bottomLeft);
 
+            double tan_x = (cpt.x-cameraMatrix.at<double>(0,2)) / cameraMatrix.at<double>(0, 0);
+            double tan_y = (cpt.y - cameraMatrix.at<double>(1, 2)) / cameraMatrix.at<double>(1, 1);
+            double angle_x = atan(tan_x) / 2 / CV_PI * 360;
+            double angle_y = atan(tan_y) / 2 / CV_PI * 360;
+
+            std::cout << "绕x轴" << angle_y << std::endl;
+            std::cout << "绕y轴" << angle_x << std::endl;
 
             bool success = cv::solvePnP(objectPoints, imagePoints2, cameraMatrix, distCoeffs, rvec, tvec);
 
@@ -182,25 +182,14 @@ int main()
                 cv::Mat rotationMatrix;
                 cv::Rodrigues(rvec, rotationMatrix);
 
-                //Mat转换成Matrix3d
-                Eigen::Matrix3d rotationMatrix2;
-                rotationMatrix2 << rotationMatrix.at<double>(0, 0), rotationMatrix.at<double>(0, 1), rotationMatrix.at<double>(0, 2),
-                        rotationMatrix.at<double>(1, 0), rotationMatrix.at<double>(1, 1), rotationMatrix.at<double>(1, 2),
-                        rotationMatrix.at<double>(2, 0), rotationMatrix.at<double>(2, 1), rotationMatrix.at<double>(2, 2);
-                //旋转矩阵转行成欧拉角
-                Eigen::Vector3d euler_angles =  rotationMatrix2.eulerAngles(2,1,0);// roll pitch yaw
-
-//                std::cout << "旋转向量:" << std::endl << rvec << std::endl;
-//                std::cout << "平移向量:" << std::endl << tvec << std::endl;
-//                std::cout << "旋转矩阵:" << std::endl << rotationMatrix << std::endl;
-                std::cout<<"yall pitch roll ="<<euler_angles.transpose()<<std::endl;
-
             }
+
         }
 
         cv::imshow("video1", canny);
         cv::imshow("video2", image);
-        cv::waitKey(1000 / video.get(cv::CAP_PROP_FPS));
+        //cv::waitKey(1000 / video.get(cv::CAP_PROP_FPS));
+
     }
     return 0;
 }
