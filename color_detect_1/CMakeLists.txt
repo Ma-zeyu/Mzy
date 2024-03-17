@@ -4,7 +4,7 @@ set(PROJECT_NAME1 "camera_class_project")
 # Define project name
 #set(CMAKE_BUILD_TYPE "Debug")
 set(CMAKE_BUILD_TYPE "Release")
-set(PROJ_DIR "/home/mzy/Documents/gig-e_camera-master")
+set(PROJ_DIR "/home/mzy/Documents/color_detect_1")
 
 project(${PROJECT_NAME1})
 find_package(OpenCV REQUIRED)
