@@ -4,7 +4,7 @@
 using namespace std;
 using namespace cv;
 
-// 定义棋盘格的尺寸
+// 定义棋盘格的尺寸  是交点
 int CHECKERBOARD[2]={ 8,11};
 
 int main()
