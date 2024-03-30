@@ -416,7 +416,7 @@ C++ 需要调用的中间文件(.../工作空间/devel/include/包名/xxx.h)
  rostopic
  ```
 
-
+订阅方要定义回调函数，发布方不需要回调函数
 
 ## 避坑！！！
 
@@ -611,5 +611,261 @@ int main(int argc, char *argv[])
 
 ```
 
+服务方要定义回调函数，客户端不需要
 
+```cpp
+/*
+    需求: 
+        编写两个节点实现服务通信，客户端节点需要提交两个整数到服务器
+        服务器需要解析客户端提交的数据，相加后，将结果响应回客户端，
+        客户端再解析
+
+    服务器实现:
+        1.包含头文件
+        2.初始化 ROS 节点
+        3.创建 ROS 句柄
+        4.创建 客户端 对象
+        5.请求服务，接收响应
+
+*/
+// 1.包含头文件
+#include "ros/ros.h"
+#include "demo03_server_client/AddInts.h"
+
+int main(int argc, char *argv[])
+{
+    setlocale(LC_ALL,"");
+
+    // 调用时动态传值,如果通过 launch 的 args 传参，需要传递的参数个数 +3
+    if (argc != 3)
+    // if (argc != 5)//launch 传参(0-文件路径 1传入的参数 2传入的参数 3节点名称 4日志路径)
+    {
+        ROS_ERROR("请提交两个整数");
+        return 1;
+    }
+
+
+    // 2.初始化 ROS 节点
+    ros::init(argc,argv,"AddInts_Client");
+    // 3.创建 ROS 句柄
+    ros::NodeHandle nh;
+    // 4.创建 客户端 对象
+    ros::ServiceClient client = nh.serviceClient<demo03_server_client::AddInts>("AddInts");
+    //等待服务启动成功
+    //方式1
+    ros::service::waitForService("AddInts");
+    //方式2
+    // client.waitForExistence();
+    // 5.组织请求数据
+    demo03_server_client::AddInts ai;
+    ai.request.num1 = atoi(argv[1]);
+    ai.request.num2 = atoi(argv[2]);
+    // 6.发送请求,返回 bool 值，标记是否成功
+    bool flag = client.call(ai);
+    // 7.处理响应
+    if (flag)
+    {
+        ROS_INFO("请求正常处理,响应结果:%d",ai.response.sum);
+    }
+    else
+    {
+        ROS_ERROR("请求处理失败....");
+        return 1;
+    }
+
+    return 0;
+}
+
+```
+
+**注意:**
+
+如果先启动客户端，那么会导致运行失败
+
+**优化:**
+
+在客户端发送请求前添加:`client.waitForExistence();`(client是客户端名称)
+
+或:`ros::service::waitForService("AddInts");`(AddInts是话题名称)
+
+这是一个阻塞式函数，只有服务启动成功后才会继续执行
+
+此处可以使用 launch 文件优化，但是需要注意 args 传参特点
+
+### 参数服务器
+
+参数服务器相当于是独立于所有节点的一个公共容器，可以将数据存储在该容器中，被不同的节点调用，当然不同的节点也可以往其中存储数据
+
+相当于C++中全局变量
+
+实现参数增删改查操作
+
+注意:参数服务器不是为高性能而设计的，因此最好用于存储静态的非二进制的简单数据
+
+个人理解的句柄就是ros Master
+
+```cpp
+//参数新增
+//1.使用NodeHandle类
+		ros::NodeHandle nh;
+		nh.setParam("key", valua);
+//2.使用ros::param命名空间
+		ros::param::set("key", valua);
+
+//修改与上述一样，key要是之前定义好的，值会被覆盖
+
+//参数查询
+//1.使用NodeHandle类
+		param(键,默认值)   
+            存在，返回对应结果，否则返回默认值
+			int radius = nh.param("radius", 0.5);
+ 		getParam(键,存储结果的变量)
+            存在,返回 true,且将值赋值给参数2
+            如果键不存在，那么返回值为 false，且不为参数2赋值
+
+        getParamCached(键,存储结果的变量)--提高变量获取效率
+            存在,返回 true,且将值赋值给参数2
+            若果键不存在，那么返回值为 false，且不为参数2赋值
+
+        getParamNames(std::vector<std::string>)
+            获取所有的键的名称,并存储在参数 vector 中 
+
+        hasParam(键)
+            是否包含某个键，存在返回 true，否则返回 false
+
+        searchParam(参数1，参数2)
+            搜索键，参数1是被搜索的键，参数2存储搜索结果的变量
+//2.使用ros::param命名空间
+    	ros::param ----- 与 NodeHandle 类似
+
+//参数删除
+//1.使用NodeHandle类
+        deleteParam("键")
+        根据键删除参数，删除成功，返回 true，否则(参数不存在)，返回 false（是键的参数，不是键的本身）
+//2.使用ros::param命名空间
+        del("键")
+        根据键删除参数，删除成功，返回 true，否则(参数不存在)，返回 false（是键的参数，不是键的本身）     
+```
+
+### 案例操作
+
+```shell
+roscore  启动ros核心
+rosrun turtlesim  turtlesim_node  启动乌龟运动节点
+rosrun turtlesim turtle_teleop_key 启动键盘控制
+```
+
+#### 一，让乌龟以固定速度运动
+
+**实现流程:**
+
+1. 通过计算图结合ros命令获取话题与消息信息。
+
+   ```shell
+   获取话题/turtle1/pose
+   rqt_graph
+   或者rostopic list
+   
+   获取消息类型(消息类型相当于自定义的srv与msg)turtlesim/Pose
+   rostopic type /turtle1/cmd_vel    （/turtle1/cmd_vel是节点图箭头上面的文字）
+   获取消息格式
+   rosmsg info turtlesim/Pose 
+   ```
+
+   
+
+2. 编码实现运动控制节点。
+
+3. 启动 roscore、turtlesim_node 以及自定义的控制节点，查看运行结果。
+
+PS：对运动的解释
+
+​	线速度：x水平前后运动的速度
+
+​                       y水平左右运动的速度（麦轮）
+
+​			z垂直平面的速度
+
+​	角速度：x翻滚角：机舱不动，机翼上下转动
+
+​			y俯仰角：机翼不动，机舱上下转动
+
+​			z偏航角水平转动
+
+#### 二，实时获取乌龟位姿
+
+##### 1.话题与消息获取
+
+**获取话题:**/turtle1/pose
+
+```shell
+rostopic list
+```
+
+**获取消息类型:**turtlesim/Pose（位姿）
+
+```shell
+rostopic type  /turtle1/pose
+```
+
+**获取消息格式:**
+
+```shell
+rosmsg info turtlesim/Pose
+```
+
+**响应结果:**
+
+```shell
+float32 x
+float32 y
+float32 theta
+float32 linear_velocity
+float32 angular_velocity
+```
+
+简短认识：不同话题表示不同情况
+
+```cpp
+/*  
+    订阅小乌龟的位姿: 时时获取小乌龟在窗体中的坐标并打印
+    准备工作:
+        1.获取话题名称 /turtle1/pose
+        2.获取消息类型 turtlesim/Pose
+        3.运行前启动 turtlesim_node 与 turtle_teleop_key 节点
+
+    实现流程:
+        1.包含头文件
+        2.初始化 ROS 节点
+        3.创建 ROS 句柄
+        4.创建订阅者对象
+        5.回调函数处理订阅的数据
+        6.spin
+*/
+
+#include "ros/ros.h"
+#include "turtlesim/Pose.h"
+
+void doPose(const turtlesim::Pose::ConstPtr& p){
+    ROS_INFO("乌龟位姿信息:x=%.2f,y=%.2f,theta=%.2f,lv=%.2f,av=%.2f",
+        p->x,p->y,p->theta,p->linear_velocity,p->angular_velocity
+    );
+}
+
+int main(int argc, char *argv[])
+{
+    setlocale(LC_ALL,"");
+    // 2.初始化 ROS 节点
+    ros::init(argc,argv,"sub_pose");
+    // 3.创建 ROS 句柄
+    ros::NodeHandle nh;
+    // 4.创建订阅者对象
+    ros::Subscriber sub = nh.subscribe<turtlesim::Pose>("/turtle1/pose",1000,doPose);
+    // 5.回调函数处理订阅的数据
+    // 6.spin
+    ros::spin();
+    return 0;
+}
+
+```
 
