@@ -18,6 +18,10 @@ HTTP HTTPS Socks 127.0.0.1 7890
 
 FTP 空 0
 
+clash界面打开倒数第一个开关（Ubuntu）
+
+windows系统下，不用更改网络代理，clash界面打开倒数两个开关
+
 ## 三，typora
 
 官网
